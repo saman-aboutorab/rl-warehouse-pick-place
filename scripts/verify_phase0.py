@@ -104,7 +104,6 @@ print("""
 """)
 
 from envs.pickplace_wrapper import PickPlaceWrapper
-from envs.nutassembly_wrapper import NutAssemblyWrapper
 
 section("PickPlace wrapper — single object (Can)")
 env = PickPlaceWrapper(single_object="Can", horizon=500)
@@ -135,16 +134,6 @@ for i in range(5):
     print(f"    {i+1:<6d} {r:<10.1f} {str(np.round(obs['achieved_goal'],3)):<35s} {dist:.3f} m")
 env.close()
 
-section("NutAssembly wrapper — single nut (SquareNut)")
-env = NutAssemblyWrapper(single_nut="SquareNut", horizon=500)
-obs, _ = env.reset()
-show("observation shape", obs["observation"].shape,  "proprio [50] + nut-state [14]")
-show("achieved_goal",     np.round(obs["achieved_goal"], 3), "where the SquareNut is RIGHT NOW")
-show("desired_goal",      np.round(obs["desired_goal"],  3), "where the SquarePeg is (fixed)")
-show("distance to goal",  f"{np.linalg.norm(obs['achieved_goal'] - obs['desired_goal']):.3f} m",
-     "tighter tolerance needed than PickPlace")
-env.close()
-
 # ─────────────────────────────────────────────────────────────
 header("4. HER reward function — how success is measured")
 # ─────────────────────────────────────────────────────────────
@@ -153,7 +142,6 @@ print("""
   old episodes. The function checks: is the object close enough?
 
   PickPlace threshold : 5 cm  (placing in a bin — some slack allowed)
-  NutAssembly threshold: 2 cm (peg insertion — must be precise)
 """)
 
 env = PickPlaceWrapper(single_object="Can")
@@ -178,25 +166,6 @@ for label, achieved in tests:
     print(f"    {label:<30s} {dist:.2f} m       {outcome}")
 env.close()
 
-env = NutAssemblyWrapper(single_nut="SquareNut")
-env.reset()
-tests_nut = [
-    ("1 cm away  (on peg)",        goal + [0.01, 0.00, 0.00]),
-    ("2 cm away  (just on peg)",   goal + [0.02, 0.00, 0.00]),
-    ("3 cm away  (just off peg)",  goal + [0.03, 0.00, 0.00]),
-    ("10 cm away (clearly off)",   goal + [0.10, 0.00, 0.00]),
-]
-section("NutAssembly (threshold = 2 cm)")
-print(f"    {'scenario':<30s} {'distance':<12s} {'reward'}")
-print(f"    {'─'*30} {'─'*12} {'─'*6}")
-for label, achieved in tests_nut:
-    achieved = np.array(achieved, dtype=np.float32)
-    dist = np.linalg.norm(achieved - goal)
-    reward = env.compute_reward(achieved, goal, {})
-    outcome = "+1  ✓ success" if reward == 1.0 else " 0  ✗ not there yet"
-    print(f"    {label:<30s} {dist:.2f} m       {outcome}")
-env.close()
-
 # ─────────────────────────────────────────────────────────────
 header("Summary — Phase 0 complete")
 # ─────────────────────────────────────────────────────────────
@@ -204,10 +173,8 @@ print("""
   What is working:
     ✓ robosuite + MuJoCo running — physics simulator is live
     ✓ PickPlace env: 4 objects, 4 containers, action=[7], obs dict with 28 keys
-    ✓ NutAssembly env: 2 nuts, 2 pegs, same action space
-    ✓ PickPlaceWrapper: obs=[64], achieved_goal=[3], desired_goal=[3]
-    ✓ NutAssemblyWrapper: same shape, tighter reward threshold
-    ✓ HER reward function: correctly returns +1 when close, 0 when far
+    ✓ PickPlaceWrapper: obs=[64] single-object, obs=[106] 4-object, goal=[3]
+    ✓ HER reward function: correctly returns +1 within 5 cm, 0 when far
 
   What you will see in Phase 1:
     → SAC + HER training on single-object PickPlace (Can → container)

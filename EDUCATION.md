@@ -9,9 +9,8 @@ Written for someone learning the stack from scratch — no assumed knowledge.
 
 ### What the project is
 
-A robot arm learns two tasks from scratch using only reward signals — no pre-programmed trajectories:
-- **Task A (PickPlace):** Pick 4 objects out of a bin, place each in its matching container
-- **Task B (NutAssembly):** Pick 2 nuts, insert each onto the correct peg with precise orientation
+A robot arm learns to sort objects from scratch using only reward signals — no pre-programmed trajectories:
+- **Task:** Pick 4 objects (can, cereal, milk, bread) out of a bin, place each in its matching container
 
 The agent controls a **Franka Panda** (7-joint robot arm) inside MuJoCo via robosuite.
 
@@ -47,17 +46,6 @@ object-state           [14]   same fields, but only for the one active object
 Total obs (wrapper):   [64]   dtype: float32
 ```
 
-**NutAssembly (2-nut mode)**:
-```
-robot0_proprio-state   [50]
-object-state           [28]   pos[3]+quat[4]+rel_pos[3]+rel_quat[4] per nut × 2
-Total obs (wrapper):   [78]   dtype: float32
-
-Single-nut mode:
-object-state           [14]
-Total obs (wrapper):   [64]   dtype: float32
-```
-
 The wrapper detects these dimensions dynamically at init time, so no hardcoded numbers.
 
 ---
@@ -78,8 +66,7 @@ casts to float64 before passing to robosuite, and float32 on the output side.
 
 Sparse — agent gets almost nothing until it succeeds:
 ```
-PickPlace:    +1 per object correctly in container  (max +4 per episode)
-NutAssembly:  +1 per nut correctly on peg           (max +2 per episode)
+PickPlace:  +1 per object correctly in container  (max +4 per episode)
 ```
 This is why HER is essential — without it early training is nearly blind.
 
@@ -110,16 +97,17 @@ The arm learns "how to move objects to arbitrary positions" before hitting the e
 
 **Actor (policy)** — decides which action to take:
 ```
-Input:   concat(obs [72], desired_goal [3])  →  [75]
-Layer 1: Linear(75 → 256) + ReLU
+Input:   concat(obs [64], desired_goal [3])  →  [67]   (single-object mode)
+         concat(obs [106], desired_goal [3]) →  [109]  (4-object mode)
+Layer 1: Linear(67 → 256) + ReLU
 Layer 2: Linear(256 → 256) + ReLU
-Output:  mean [8] + log_std [8]  →  sample action via reparameterization
+Output:  mean [7] + log_std [7]  →  sample action via reparameterization
 ```
 
 **Two Critics (Q1, Q2)** — estimate how good a (state, action) pair is:
 ```
-Input:   concat(obs [72], goal [3], action [8])  →  [83]
-Layer 1: Linear(83 → 256) + ReLU
+Input:   concat(obs [64], goal [3], action [7])  →  [74]
+Layer 1: Linear(74 → 256) + ReLU
 Layer 2: Linear(256 → 256) + ReLU
 Output:  scalar Q-value
 ```
@@ -172,8 +160,8 @@ goal = container_i_pos  [3]
      │
      ▼
 SAC runs ≤ T_low steps
-  input each step: concat(obs [72], goal [3]) → [75]
-  output each step: action [8]
+  input each step: concat(obs [64], goal [3]) → [67]
+  output each step: action [7]
   stops: object placed OR T_low steps elapsed
      │
      ├─ success → DQN reward +1, update DQN buffer
@@ -189,14 +177,12 @@ DQN sees sub-task outcomes. SAC sees every physics step but focuses on one objec
 
 ### Curriculum Stages
 
-| Stage | Task | Input shape | Max reward |
-|-------|------|-------------|------------|
-| 1 | PickPlace, 1 object  | obs [39] + goal [3] = [42] | +1 |
-| 2 | PickPlace, 4 objects | obs [72] + goal [3] = [75] | +4 |
-| 3 | NutAssembly, 1 nut   | obs [46] + goal [3] = [49] | +1 |
-| 4 | NutAssembly, 2 nuts  | obs [60] + goal [3] = [63] | +2 |
+| Stage | Task | Obs shape | Max reward |
+|-------|------|-----------|------------|
+| 1 | PickPlace, 1 object  | obs [64] + goal [3] = [67] | +1 |
+| 2 | PickPlace, 4 objects | obs [106] + goal [3] = [109] | +4 |
 
-Each stage fine-tunes from the previous checkpoint.
+Stage 2 fine-tunes from the Stage 1 checkpoint — the arm already knows how to grasp and place, it just needs to learn sequencing.
 
 ---
 
@@ -204,16 +190,16 @@ Each stage fine-tunes from the previous checkpoint.
 
 ```
 MuJoCo physics
-    │  obs [72], reward float, done bool
+    │  obs dict (28 keys), reward float, done bool
     ▼
 Env Wrapper  (Gym-compatible, adds achieved_goal / desired_goal)
-    │  {obs [72], achieved_goal [3], desired_goal [3]}
+    │  {obs [64 or 106], achieved_goal [3], desired_goal [3]}
     ▼
 Replay Buffer  (capacity 1M transitions)
     │  stores raw + HER-relabeled transitions
     ▼
 SAC training  (every 50 env steps, batch size 256)
-    │  updates Actor [75→256→256→16] and Critics [83→256→256→1]
+    │  updates Actor [67→256→256→14] and Critics [74→256→256→1]
     ▼
 Hierarchical Runner
     │  calls DQN [20→128→64→4] every T_low steps
@@ -294,10 +280,8 @@ This mirrors how humans think: you first decide "I'll grab the cereal box" (plan
 Training order matters. You wouldn't learn calculus before algebra. Same here:
 
 ```
-Stage 1: One object, one container   → easiest
-Stage 2: Four objects, four containers
-Stage 3: One nut, one peg
-Stage 4: Two nuts, two pegs           → hardest
+Stage 1: One object, one container   → easiest — learn grasping and placing
+Stage 2: Four objects, four containers → harder — learn sequencing
 ```
 
 Each stage transfers skills (grasping, moving, releasing) to the next.
@@ -309,17 +293,11 @@ Objects start at different positions every episode. This forces the policy to ge
 
 ### Environment Observation and Action Spaces
 
-#### PickPlace (Task A)
-- **Observation:** `~39-dimensional` float vector — robot proprioception (joint positions + velocities) + object poses
-- **Action:** `7-dimensional` float vector in `[-1, 1]` — normalized joint velocity commands
+#### PickPlace
+- **Observation:** `[64]` (single-object) or `[106]` (4-object) float32 vector — robot proprioception + object poses
+- **Action:** `[7]` float64 vector in `[-1, 1]` — normalized joint velocity commands
 - **Goal:** Place all 4 objects in their matching containers
 - **Reward:** Sparse — `+1` per object correctly placed, `0` otherwise
-
-#### NutAssembly (Task B)
-- **Observation:** `~45-dimensional` float vector — robot state + nut positions + peg positions + nut orientations
-- **Action:** `7-dimensional` float vector in `[-1, 1]`
-- **Goal:** Insert each nut onto the correct peg
-- **Reward:** Sparse — `+1` per nut correctly assembled
 
 ---
 
@@ -331,7 +309,7 @@ Episode starts
       ▼
 High-Level DQN
   Input:  env state (which objects remain)   shape: [n_objects * 2]
-  Output: sub-task index (which object/peg)  shape: [n_subtasks]
+  Output: sub-task index (which object)      shape: [4]
       │
       ▼  (selected sub-task becomes goal for low level)
 Low-Level SAC + HER
@@ -359,10 +337,10 @@ Training update (every N steps)
 | [CLAUDE.md](CLAUDE.md) | Instructions for Claude Code — goal, permissions, conventions |
 | [requirements.txt](requirements.txt) | Python dependencies |
 | [.gitignore](.gitignore) | Excludes large files (models, videos, W&B logs) from git |
-| `src/envs/` | Wrappers around robosuite environments |
+| [src/envs/pickplace_wrapper.py](src/envs/pickplace_wrapper.py) | Gym Dict wrapper around robosuite PickPlace |
 | `src/agents/sac/` | SAC + HER low-level controller |
 | `src/agents/dqn/` | High-level DQN task selector |
 | `src/hierarchical/` | Combines DQN + SAC into one agent |
 | `src/curriculum/` | Curriculum stage definitions |
 | `src/eval/` | Evaluation harness (200+ episode runs) |
-| `configs/` | Hyperparameter configs per task/stage |
+| `configs/` | Hyperparameter configs per stage |

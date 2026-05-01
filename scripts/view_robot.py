@@ -25,7 +25,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--env",       default="PickPlace", choices=["PickPlace", "NutAssembly"])
+parser.add_argument("--env",       default="PickPlace", choices=["PickPlace"])
 parser.add_argument("--steps",     type=int, default=500)
 parser.add_argument("--no-viewer", action="store_true", help="skip live window, just save video")
 args = parser.parse_args()

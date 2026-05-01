@@ -2,7 +2,7 @@
 
 <!-- ✏️ Fill this in — Claude Code uses it to make better decisions -->
 - **Project name:** rl-warehouse-pick-place
-- **Goal:** Train a 7-DoF Panda robot arm via hierarchical RL (SAC + HER + DQN) to sort 4 objects into bins (Task A) and assemble 2 nuts onto matching pegs (Task B) — entirely through trial and error, no programmed motions
+- **Goal:** Train a 7-DoF Panda robot arm via hierarchical RL (SAC + HER + DQN) to sort 4 objects into correct bins — entirely through trial and error, no programmed motions
 - **Stack:** Python, robosuite, MuJoCo, PyTorch, Stable-Baselines3, Weights & Biases
 - **Repo:** Git-tracked — treat file sizes and history with care
 

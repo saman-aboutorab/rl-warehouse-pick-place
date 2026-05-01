@@ -19,7 +19,7 @@ Used for: debugging history, SR&ED documentation, onboarding future contributors
 
 **Next steps:**
 1. Install dependencies: `pip install -r requirements.txt`
-2. Verify robosuite setup: run PickPlace and NutAssembly with random actions
+2. Verify robosuite setup: run PickPlace with random actions
 3. Understand observation/action spaces — log shapes and ranges
 4. Begin SAC + HER training on single-object PickPlace
 
@@ -28,7 +28,7 @@ Used for: debugging history, SR&ED documentation, onboarding future contributors
 ## [2026-05-01] Milestone: PHASES.md created — roadmap locked in
 
 **What works:**
-- Full 6-phase roadmap written in `PHASES.md` covering: env setup, single-object baseline, flat multi-object, hierarchical DQN+SAC, NutAssembly curriculum, ablation study, and final polish
+- Full 5-phase roadmap written in `PHASES.md` covering: env setup, single-object baseline, flat multi-object, hierarchical DQN+SAC, ablation study, and final polish
 - Each phase has a clear exit criterion and numbered checklist steps
 - Phase summary table added for quick orientation
 
@@ -42,15 +42,14 @@ Used for: debugging history, SR&ED documentation, onboarding future contributors
 
 **What works:**
 - All dependencies installed in `.venv` (torch 2.11 + CUDA 13, robosuite 1.5.2, MuJoCo 3.8, SB3 2.8, W&B 0.26)
-- Both `PickPlace` and `NutAssembly` envs smoke-tested: reset + step OK
-- Observation and action spaces logged — key corrections vs initial estimates:
-  - Action space is `[7]` not `[8]` (gripper embedded in composite controller)
-  - proprio-state: `[50]`, object-state: `[56]` (4-obj) / `[28]` (2-nut) / `[14]` (single mode)
+- PickPlace env smoke-tested: reset + step OK
+- Observation and action spaces logged — key facts:
+  - Action space is `[7]` (gripper embedded in composite controller)
+  - proprio-state: `[50]`, object-state: `[56]` (4-obj) / `[14]` (single mode)
   - Episode horizon: 1000 steps
 - 10 random-action episodes run: reward=0.0 for all — confirms sparse reward and motivates HER
 - `src/envs/pickplace_wrapper.py` written — Gym Dict wrapper with achieved_goal/desired_goal
-- `src/envs/nutassembly_wrapper.py` written — same pattern for NutAssembly
-- Both wrappers tested: obs shape `[64]` in single-object mode, step/reset OK
+- Wrapper tested: obs shape `[64]` in single-object mode, step/reset OK
 
 **Git tag:** (waiting for first training run)
 
