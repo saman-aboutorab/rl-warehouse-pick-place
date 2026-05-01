@@ -20,7 +20,13 @@ sac:
   buffer_size: 1_000_000     # replay buffer capacity (1M transitions ≈ 2 GB RAM)
   tau: 0.005                 # soft target network update rate
   gamma: 0.95                # discount factor (shorter horizon → lower gamma ok)
-  ent_coef: auto             # entropy coefficient; auto-tune keeps exploration alive
+  # "auto_0.1" = auto-tune AND start from 0.1 (SB3 syntax)
+  # The 50k smoke test showed α collapsed to 0.002 by step 10k — the policy
+  # went deterministic before ever seeing a +1 reward. Starting at 0.1 instead
+  # of SB3's default of 1.0 keeps exploration alive through the critical
+  # 0–200k window where HER is building up the first useful experiences.
+  # Auto-tune will lower it naturally once real successes start appearing.
+  ent_coef: "auto_0.1"
   policy_kwargs:
     net_arch: [256, 256]     # actor and critic hidden layers
 

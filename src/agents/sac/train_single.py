@@ -44,7 +44,7 @@ LR             = cfg["sac"]["learning_rate"]
 BUFFER_SIZE    = cfg["sac"]["buffer_size"]
 TAU            = cfg["sac"]["tau"]
 GAMMA          = cfg["sac"]["gamma"]
-ENT_COEF       = cfg["sac"]["ent_coef"]
+ENT_COEF       = cfg["sac"]["ent_coef"]   # e.g. "auto_0.1" = auto-tune starting from 0.1
 NET_ARCH       = cfg["sac"]["policy_kwargs"]["net_arch"]
 N_SAMPLED_GOAL = cfg["her"]["n_sampled_goal"]
 HER_STRATEGY   = cfg["her"]["goal_selection_strategy"]
