@@ -3,7 +3,7 @@ Watch the robot in MuJoCo.
 
 Runs one episode with random actions and:
   1. Opens a live viewer window so you can watch in real time
-  2. Also saves a video to videos/phase0_random.mp4
+  2. Also saves a timestamped video to videos/ so every run is kept
 
 Usage:
     source .venv/bin/activate
@@ -20,6 +20,7 @@ import argparse
 import sys
 import os
 import numpy as np
+from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -33,7 +34,8 @@ import robosuite as suite
 import cv2
 
 os.makedirs("videos", exist_ok=True)
-video_path = f"videos/phase0_{args.env.lower()}_random.mp4"
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+video_path = f"videos/{args.env.lower()}_random_{timestamp}.mp4"
 
 print(f"\nEnvironment : {args.env}")
 print(f"Steps       : {args.steps}")
