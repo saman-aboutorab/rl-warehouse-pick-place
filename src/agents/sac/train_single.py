@@ -22,9 +22,6 @@ import yaml
 import logging
 import numpy as np
 
-# Silence robosuite's per-reset INFO spam (controller loading messages)
-# WARNING-level messages (macros not found etc.) are still shown
-logging.getLogger("robosuite").setLevel(logging.WARNING)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "src"))
@@ -105,7 +102,14 @@ else:
 print()
 
 # ── Build environment ──────────────────────────────────────────────────────────
-from envs.pickplace_wrapper import PickPlaceWrapper
+from envs.pickplace_wrapper import PickPlaceWrapper  # triggers robosuite import
+
+# Silence robosuite's per-reset INFO spam AFTER import so all module-level
+# loggers exist. Setting WARNING on the parent propagates to future children.
+for _n in list(logging.root.manager.loggerDict):
+    if "robosuite" in _n:
+        logging.getLogger(_n).setLevel(logging.WARNING)
+logging.getLogger("robosuite").setLevel(logging.WARNING)
 from stable_baselines3 import SAC
 from stable_baselines3.her import HerReplayBuffer
 from stable_baselines3.common.callbacks import EvalCallback, BaseCallback, CheckpointCallback
