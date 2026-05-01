@@ -27,8 +27,10 @@ After completing any non-trivial task, you must:
 4. **Note data formats and dimensions** — shapes, types, file formats involved
 5. **Describe the architecture** — how components connect (system or data flow)
 6. **Write a verify script and run it** — after every phase or significant task, create or update `scripts/verify_phaseN.py`. It must:
-   - Run all checks automatically (no manual inspection needed)
-   - Print `PASS` or `FAIL` for each check with a short detail
+   - **Show actual data** — print real values, shapes, tensor contents, rewards, so the user can see what the system is doing, not just whether it works
+   - **Walk through a live example** — step through the process (reset → observe → act → reward) and print what happens at each stage
+   - **Explain the numbers** — label every printed value so the user knows what they are looking at (e.g. "Can position: [0.09, -0.27, 0.86] — this is where the can spawned in the bin")
+   - **Flag problems clearly** — if something is broken, print what went wrong and what to expect instead
    - Be runnable with a single command: `python scripts/verify_phaseN.py`
    - Be run immediately and the output shown in chat before declaring the task done
 
