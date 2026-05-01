@@ -29,6 +29,8 @@ After completing any non-trivial task, you must:
 
 Then write that explanation into **`EDUCATION.md`** (see below).
 
+Also post a **brief summary in the chat** — 2–4 bullet points covering what was done, what files were created/changed, and what comes next.
+
 ---
 
 ## EDUCATION.md — Tutorial Log
