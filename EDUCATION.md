@@ -5,6 +5,122 @@ Written for someone learning the stack from scratch — no assumed knowledge.
 
 ---
 
+## [2026-05-01] Phase 1: SAC + HER Training Setup
+
+### What was built
+
+Three files:
+- [src/agents/sac/train_single.py](src/agents/sac/train_single.py) — the training loop
+- [configs/sac_single.yaml](configs/sac_single.yaml) — all hyperparameters in one place
+- [scripts/verify_phase1.py](scripts/verify_phase1.py) — shows the architecture and HER live
+
+### How training works (step by step)
+
+Each training step:
+1. The **actor** network looks at `obs[64] + achieved_goal[3] + desired_goal[3]` = `[70]` and outputs a joint velocity command `[7]`
+2. MuJoCo simulates one physics frame (~20ms of robot time)
+3. The transition `(obs, action, reward, next_obs)` is stored in the replay buffer
+4. HER immediately adds 4 more relabeled versions of the same transition (explained below)
+
+Every gradient step (after `learning_starts=1000`):
+1. Sample a batch of 256 transitions (mix of real + HER relabeled)
+2. **Critic update**: compare predicted Q-values against Bellman targets, minimize MSE
+3. **Actor update**: move the policy toward actions that maximize Q + entropy bonus
+4. **Soft update**: slowly blend target networks toward live networks (`τ=0.005`)
+
+### HER — what "relabeling" means
+
+The arm almost never places the Can in the right container early in training. Without HER, reward stays 0 and the agent learns nothing.
+
+HER's fix: after each episode, pick 4 random later steps. Use the Can's position at those steps as if they were the goal. Since the Can was actually there, reward becomes +1. This gives the agent thousands of "successes" on fake goals — but the skills it learns (grasping, moving objects) transfer to the real goal.
+
+```
+Real episode step 12: Can at [0.03, -0.39, 0.86] → real goal [-0.11, -0.28, 0.82] → reward 0
+HER relabeling:       Can at [0.03, -0.39, 0.86] → fake goal [0.03, -0.39, 0.86] → reward 1 ✓
+```
+
+### Network architectures (verified by running)
+
+**Actor** (decides action):
+```
+Input [70] = obs[64] + achieved_goal[3] + desired_goal[3]
+→ Linear(70, 256) + ReLU
+→ Linear(256, 256) + ReLU
+→ mean [7] + log_std [7]  → sample action via reparameterization trick
+Total: 87,566 parameters
+```
+
+**Two Critics** (estimate Q-value):
+```
+Input [77] = obs[64] + achieved_goal[3] + desired_goal[3] + action[7]
+→ Linear(77, 256) + ReLU
+→ Linear(256, 256) + ReLU
+→ scalar Q-value
+Two of these (Q1, Q2) — take min → prevents overestimating
+Total: 172,034 parameters × 2
+```
+
+### Hyperparameters (configs/sac_single.yaml)
+
+| Parameter | Value | Why |
+|-----------|-------|-----|
+| `learning_rate` | 0.001 | Standard SAC default; robust across many tasks |
+| `buffer_size` | 1,000,000 | Large enough to store diverse experience |
+| `batch_size` | 256 | Stable gradient estimates without too much memory |
+| `gamma` | 0.95 | Discounts future reward — shorter horizon tasks benefit |
+| `tau` | 0.005 | Slow target network update — stabilizes training |
+| `ent_coef` | auto | Self-tuning entropy keeps exploration alive |
+| `her_k` | 4 | 4 relabeled goals per real transition = 80% buffer is HER |
+| `her_strategy` | future | Use goals from later in same episode = informative relabeling |
+
+### Data flow during training
+
+```
+Episode reset
+    │  obs = {observation[64], achieved_goal[3], desired_goal[3]}
+    ▼
+Actor forward pass
+    │  input: [obs + ag + dg] = [70]
+    │  output: action [7]
+    ▼
+robosuite step
+    │  reward: 0 (usually) or 1 (Can in container within 5 cm)
+    ▼
+Replay buffer store
+    │  (obs, action, reward, next_obs) × 1 real + 4 HER relabeled
+    ▼
+Critic + Actor gradient update (batch of 256)
+    │  critic loss: TD error
+    │  actor loss: −Q + entropy bonus
+    ▼
+Soft-update target networks
+    │  θ_target ← 0.005·θ + 0.995·θ_target
+    ▼
+Repeat 500,000 times
+```
+
+### What to expect during training
+
+- Steps 0–1,000: random exploration only (learning not started yet)
+- Steps 1,000–100,000: reward stays 0 but buffer fills up; HER relabeling generates "fake successes"
+- Steps 100,000–200,000: first real +1 rewards appear
+- Steps 300,000–500,000: success rate climbs past 50%, then past 80%
+
+### Commands
+
+```bash
+# 5-minute smoke test (50k steps, no W&B)
+python src/agents/sac/train_single.py --steps 50000 --no-wandb
+
+# Full training (~4–8 hours, logs to W&B)
+python src/agents/sac/train_single.py
+
+# After training: evaluate the saved checkpoint
+python scripts/verify_phase1.py --eval
+```
+
+---
+
 ## [2026-05-01] Deep Dive: Full Project Architecture — Agents, Data, Models
 
 ### What the project is

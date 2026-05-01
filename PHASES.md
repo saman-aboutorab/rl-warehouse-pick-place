@@ -58,9 +58,9 @@ source .venv/bin/activate && python scripts/verify_phase0.py
 **Goal:** Prove that SAC + HER can learn a single pick-and-place task. This is the foundational skill everything else builds on.
 **Exit criterion:** Agent places one Can into its container with >80% success rate on 50 eval episodes.
 
-- [ ] **1.1** Write training script `src/agents/sac/train_single.py` — configure SAC + HER in SB3
-- [ ] **1.2** Write hyperparameter config `configs/sac_single.yaml` — learning rate, buffer size, HER strategy
-- [ ] **1.3** Set up W&B logging — episode reward, success rate, actor/critic losses
+- [x] **1.1** Write training script `src/agents/sac/train_single.py` — configure SAC + HER in SB3
+- [x] **1.2** Write hyperparameter config `configs/sac_single.yaml` — learning rate, buffer size, HER strategy
+- [x] **1.3** Set up W&B logging — episode reward, success rate, actor/critic losses
 - [ ] **1.4** Run training (~500k steps); monitor W&B for convergence
 - [ ] **1.5** Evaluate: run 50 episodes with greedy policy, record success rate
 - [ ] **1.6** Save best checkpoint to `models/sac_single_best.zip`

@@ -38,6 +38,28 @@ Used for: debugging history, SR&ED documentation, onboarding future contributors
 
 ---
 
+## [2026-05-01] Milestone: Phase 1 steps 1.1–1.3 — SAC+HER training script written and verified
+
+**What works:**
+- `src/agents/sac/train_single.py` — full SAC+HER training loop using SB3; loads hyperparams from YAML
+- `configs/sac_single.yaml` — all hyperparameters in one file (LR, buffer, HER k, eval freq, W&B config)
+- W&B logging wired in: episode reward, success rate, eval reward logged per 10 episodes / 20k steps
+- Smoke-tested: 200-step run builds cleanly, runs on GPU (cuda), saves final checkpoint
+- Architecture verified: actor [70→256→256→14], critics [77→256→256→1], 87k + 172k params, device=cuda
+
+**Next step:** Run full training (step 1.4):
+```bash
+python src/agents/sac/train_single.py --steps 500000
+```
+
+**Reproduce setup:**
+```bash
+source .venv/bin/activate && python scripts/verify_phase1.py
+```
+**Expected:** architecture and live HER relabeling demo print correctly
+
+---
+
 ## [2026-05-01] Milestone: Phase 0 complete — environments verified and wrapped
 
 **What works:**

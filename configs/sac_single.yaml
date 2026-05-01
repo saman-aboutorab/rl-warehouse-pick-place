@@ -1,0 +1,39 @@
+# Phase 1 — SAC + HER hyperparameters for single-object PickPlace (Can → container)
+#
+# These are tuned for a laptop GPU (RTX 4070) with ~8 hours of training time.
+# SB3 HER wraps SAC and handles replay-buffer relabeling automatically.
+
+agent: SAC
+env:
+  name: PickPlace
+  single_object: Can
+  horizon: 500          # max steps per episode (~25 seconds of robot time)
+
+training:
+  total_timesteps: 500_000   # ~500k env steps; expect convergence around 200–300k
+  learning_starts: 1_000     # fill buffer with random actions before training begins
+  batch_size: 256            # transitions sampled per gradient update
+  gradient_steps: 1          # gradient updates per env step (1 = standard)
+
+sac:
+  learning_rate: 0.001       # Adam LR for actor and critic; 1e-3 is robust default
+  buffer_size: 1_000_000     # replay buffer capacity (1M transitions ≈ 2 GB RAM)
+  tau: 0.005                 # soft target network update rate
+  gamma: 0.95                # discount factor (shorter horizon → lower gamma ok)
+  ent_coef: auto             # entropy coefficient; auto-tune keeps exploration alive
+  policy_kwargs:
+    net_arch: [256, 256]     # actor and critic hidden layers
+
+her:
+  n_sampled_goal: 4          # k=4: for every real transition, HER adds 4 relabeled ones
+  goal_selection_strategy: future   # "future": pick relabeling goals from later in same episode
+
+eval:
+  n_eval_episodes: 50        # run 50 episodes to measure success rate
+  eval_freq: 20_000          # evaluate every 20k steps during training
+  best_model_save_path: models/          # SB3 saves best_model.zip inside this dir
+
+logging:
+  wandb_project: rl-warehouse-pick-place
+  wandb_run_name: sac-her-single-can
+  log_interval: 10           # log to W&B every 10 episodes
