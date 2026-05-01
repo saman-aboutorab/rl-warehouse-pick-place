@@ -49,6 +49,7 @@ EVAL_EPISODES  = cfg["eval"]["n_eval_episodes"]
 EVAL_FREQ      = cfg["eval"]["eval_freq"]
 BEST_MODEL_DIR  = cfg["eval"]["best_model_save_path"].strip()  # SB3 saves best_model.zip here
 BEST_MODEL_PATH = os.path.join(BEST_MODEL_DIR, "best_model.zip")
+CHECKPOINT_DIR  = cfg["eval"]["checkpoint_dir"].strip()
 WANDB_PROJECT  = cfg["logging"]["wandb_project"]
 WANDB_RUN_NAME = cfg["logging"]["wandb_run_name"]
 SINGLE_OBJECT  = cfg["env"]["single_object"]
@@ -64,6 +65,8 @@ print(f"  LR              : {LR}")
 print(f"  HER k           : {N_SAMPLED_GOAL}  (strategy: {HER_STRATEGY})")
 print(f"  Eval every      : {EVAL_FREQ:,} steps  ×  {EVAL_EPISODES} episodes")
 print(f"  Best model      : {BEST_MODEL_PATH}")
+CHECKPOINT_FREQ = max(TOTAL_STEPS // 5, 1_000)   # always 5 evenly-spaced snapshots
+print(f"  Checkpoints     : every {CHECKPOINT_FREQ:,} steps → {CHECKPOINT_DIR}")
 
 # ── W&B setup ─────────────────────────────────────────────────────────────────
 use_wandb = not args.no_wandb
@@ -100,10 +103,11 @@ print()
 from envs.pickplace_wrapper import PickPlaceWrapper
 from stable_baselines3 import SAC
 from stable_baselines3.her import HerReplayBuffer
-from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
+from stable_baselines3.common.callbacks import EvalCallback, BaseCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 
 os.makedirs("models", exist_ok=True)
+os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
 print("Building training environment...")
 train_env = Monitor(PickPlaceWrapper(single_object=SINGLE_OBJECT, horizon=HORIZON))
@@ -179,6 +183,14 @@ class SuccessRateEvalCallback(EvalCallback):
         return result
 
 
+# Saves sac_single_{N}_steps.zip at every milestone — 5 snapshots per run
+checkpoint_callback = CheckpointCallback(
+    save_freq=CHECKPOINT_FREQ,
+    save_path=CHECKPOINT_DIR,
+    name_prefix="sac_single",
+    verbose=1,
+)
+
 eval_callback = SuccessRateEvalCallback(
     eval_env=eval_env,
     n_eval_episodes=EVAL_EPISODES,
@@ -224,6 +236,7 @@ model.learn(
     callback=[
         WandbCallback(log_interval=10),
         ProgressCallback(print_freq=10_000),
+        checkpoint_callback,
         eval_callback,
     ],
     log_interval=10,
@@ -237,6 +250,11 @@ print(f"\n{'─'*50}")
 print(f"Training complete")
 print(f"  Final model  : {final_path}.zip")
 print(f"  Best model   : {BEST_MODEL_PATH}")
+# List milestone checkpoints saved
+ckpts = sorted([f for f in os.listdir(CHECKPOINT_DIR) if f.startswith("sac_single")])
+print(f"  Checkpoints  : {len(ckpts)} saved in {CHECKPOINT_DIR}")
+for ckpt in ckpts:
+    print(f"    {ckpt}")
 
 if use_wandb:
     import wandb

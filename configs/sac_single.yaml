@@ -32,6 +32,7 @@ eval:
   n_eval_episodes: 50        # run 50 episodes to measure success rate
   eval_freq: 20_000          # evaluate every 20k steps during training
   best_model_save_path: models/          # SB3 saves best_model.zip inside this dir
+  checkpoint_dir: models/checkpoints/   # milestone snapshots saved here (5 per run)
 
 logging:
   wandb_project: rl-warehouse-pick-place
