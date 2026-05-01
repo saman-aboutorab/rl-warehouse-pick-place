@@ -116,7 +116,8 @@ for _n in list(logging.root.manager.loggerDict):
 logging.getLogger("robosuite").setLevel(logging.WARNING)
 from stable_baselines3 import SAC
 from stable_baselines3.her import HerReplayBuffer
-from stable_baselines3.common.callbacks import EvalCallback, BaseCallback, CheckpointCallback
+from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
+import csv
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.logger import KVWriter
 from tqdm import tqdm
@@ -285,17 +286,102 @@ class SuccessRateEvalCallback(EvalCallback):
         return result
 
 
+# ── Milestone callback: save checkpoint + log persistent summary ───────────────
+class MilestoneCallback(BaseCallback):
+    """
+    Fires every `save_freq` steps. At each milestone it:
+      1. Saves the model as  sac_single_{step}_steps.zip
+      2. Prints a persistent summary line via tqdm.write() — stays visible above the bar
+      3. Appends one row to  {checkpoint_dir}/progress.csv — permanent record
+
+    Terminal looks like (these lines do NOT get overwritten):
+      ── step  100,000 ─ ep=200 ─ reward=0.00 ─ success= 0% ─ critic=0.154 ─ actor=-17.2 ─ α=0.005
+      ── step  200,000 ─ ep=400 ─ reward=0.08 ─ success= 8% ─ critic=0.082 ─ actor=-11.4 ─ α=0.003
+      ── step  300,000 ─ ep=600 ─ reward=0.34 ─ success=34% ─ critic=0.041 ─ actor= -5.1 ─ α=0.003
+
+    progress.csv columns:
+      step, episode, reward, success_rate, critic_loss, actor_loss, ent_coef, checkpoint
+    """
+
+    def __init__(self, save_freq: int, checkpoint_dir: str,
+                 progress_cb: "RichProgressCallback",
+                 metrics_store: PersistentMetricsStore,
+                 verbose: int = 0):
+        super().__init__(verbose)
+        self.save_freq      = save_freq
+        self.checkpoint_dir = checkpoint_dir
+        self._progress_cb   = progress_cb
+        self._store         = metrics_store
+        self._csv_path      = os.path.join(checkpoint_dir, "progress.csv")
+        self._csv_written   = False
+
+    def _on_training_start(self) -> None:
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        # Write CSV header once
+        with open(self._csv_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "step", "episode", "reward_last10", "success_rate",
+                "critic_loss", "actor_loss", "ent_coef", "checkpoint"
+            ])
+
+    def _on_step(self) -> bool:
+        if self.num_timesteps % self.save_freq == 0:
+            # ── 1. Save checkpoint ──────────────────────────────────────────
+            ckpt_name = f"sac_single_{self.num_timesteps}_steps"
+            ckpt_path = os.path.join(self.checkpoint_dir, ckpt_name)
+            self.model.save(ckpt_path)
+
+            # ── 2. Gather current metrics ───────────────────────────────────
+            pcb = self._progress_cb
+            s   = self._store.store
+            w   = min(10, len(pcb._ep_rewards))
+            reward   = round(float(np.mean(pcb._ep_rewards[-w:])),   4) if pcb._ep_rewards   else 0.0
+            success  = round(float(np.mean(pcb._ep_successes[-w:])),  4) if pcb._ep_successes else 0.0
+            critic   = s.get("train/critic_loss")
+            actor    = s.get("train/actor_loss")
+            ent_coef = s.get("train/ent_coef")
+
+            def _fmt(v, fmt): return format(v, fmt) if v is not None else "n/a"
+
+            # ── 3. Persistent terminal line (never overwritten by tqdm) ─────
+            tqdm.write(
+                f"  ── step {self.num_timesteps:>7,}"
+                f" ─ ep={pcb._ep_count}"
+                f" ─ reward={reward:.2f}"
+                f" ─ success={success*100:3.0f}%"
+                f" ─ critic={_fmt(critic, '.3f')}"
+                f" ─ actor={_fmt(actor, '.2f')}"
+                f" ─ α={_fmt(ent_coef, '.4f')}"
+                f"  →  {ckpt_name}.zip"
+            )
+
+            # ── 4. Append CSV row ───────────────────────────────────────────
+            with open(self._csv_path, "a", newline="") as f:
+                csv.writer(f).writerow([
+                    self.num_timesteps,
+                    pcb._ep_count,
+                    reward,
+                    success,
+                    _fmt(critic, ".6f"),
+                    _fmt(actor,  ".6f"),
+                    _fmt(ent_coef, ".6f"),
+                    f"{ckpt_name}.zip",
+                ])
+
+        return True
+
+
 # Intercepts SB3 logger so losses persist after each dump() call
 metrics_store = PersistentMetricsStore()
 
 progress_cb = RichProgressCallback(metrics_store=metrics_store, wandb_interval=10)
 
-# Saves sac_single_{N}_steps.zip at every milestone — 5 snapshots per run
-checkpoint_callback = CheckpointCallback(
+milestone_cb = MilestoneCallback(
     save_freq=CHECKPOINT_FREQ,
-    save_path=CHECKPOINT_DIR,
-    name_prefix="sac_single",
-    verbose=0,
+    checkpoint_dir=CHECKPOINT_DIR,
+    progress_cb=progress_cb,
+    metrics_store=metrics_store,
 )
 
 eval_callback = SuccessRateEvalCallback(
@@ -343,7 +429,7 @@ model.learn(
     total_timesteps=TOTAL_STEPS,
     callback=[
         progress_cb,
-        checkpoint_callback,
+        milestone_cb,
         eval_callback,
     ],
     log_interval=1,    # dump logger after every episode so metrics_store always has fresh values
@@ -357,11 +443,8 @@ print(f"\n{'─'*50}")
 print(f"Training complete")
 print(f"  Final model  : {final_path}.zip")
 print(f"  Best model   : {BEST_MODEL_PATH}")
-# List milestone checkpoints saved
-ckpts = sorted([f for f in os.listdir(CHECKPOINT_DIR) if f.startswith("sac_single")])
-print(f"  Checkpoints  : {len(ckpts)} saved in {CHECKPOINT_DIR}")
-for ckpt in ckpts:
-    print(f"    {ckpt}")
+print(f"  Run folder   : {CHECKPOINT_DIR}")
+print(f"  Progress log : {os.path.join(CHECKPOINT_DIR, 'progress.csv')}")
 
 if use_wandb:
     import wandb
