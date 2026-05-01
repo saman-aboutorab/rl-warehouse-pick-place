@@ -5,6 +5,221 @@ Written for someone learning the stack from scratch — no assumed knowledge.
 
 ---
 
+## [2026-05-01] Deep Dive: Full Project Architecture — Agents, Data, Models
+
+### What the project is
+
+A robot arm learns two tasks from scratch using only reward signals — no pre-programmed trajectories:
+- **Task A (PickPlace):** Pick 4 objects out of a bin, place each in its matching container
+- **Task B (NutAssembly):** Pick 2 nuts, insert each onto the correct peg with precise orientation
+
+The agent controls a **Franka Panda** (7-joint robot arm) inside MuJoCo via robosuite.
+
+---
+
+### The Environment Interface
+
+robosuite exposes a Gym-style interface:
+```python
+obs = env.reset()                          # start new episode
+obs, reward, done, info = env.step(action) # advance one physics step (~20ms)
+# one episode = ~500 steps = ~10 seconds of robot time
+```
+
+---
+
+### Observation Space (what the agent sees)
+
+**PickPlace** — flat float vector, shape `[72]`:
+```
+robot0_joint_pos_cos   [7]   cosine of each joint angle
+robot0_joint_pos_sin   [7]   sine of each joint angle
+robot0_joint_vel       [7]   joint angular velocities
+robot0_eef_pos         [3]   end-effector XYZ position
+robot0_eef_quat        [4]   end-effector orientation (quaternion)
+robot0_gripper_qpos    [2]   finger positions (open/close)
+robot0_gripper_qvel    [2]   finger velocities
+─────────────────────────── subtotal [32]  robot proprioception
+object_i_pos           [3]   XYZ position ×4 objects = [12]
+object_i_quat          [4]   orientation  ×4 objects = [16]
+─────────────────────────── subtotal [28]  object state
+container_i_pos        [3]   XYZ of each target container ×4 = [12]
+─────────────────────────── subtotal [12]  goal positions
+Total: [72]  dtype: float32
+```
+
+**NutAssembly** — shape `[~60]`:
+```
+robot proprioception    [32]
+nut_i_pos               [3] ×2 = [6]
+nut_i_quat              [4] ×2 = [8]   ← orientation critical for peg insertion
+peg_i_pos               [3] ×2 = [6]
+peg_i_quat              [4] ×2 = [8]
+Total: [~60]  dtype: float32
+```
+
+---
+
+### Action Space (what the agent outputs)
+
+Shape `[8]`, dtype `float32`, all values clamped to `[-1, 1]`:
+```
+joint_velocity_commands  [7]   one per joint — how fast to rotate
+gripper_command          [1]   -1 = fully open, +1 = fully closed
+```
+
+---
+
+### Reward
+
+Sparse — agent gets almost nothing until it succeeds:
+```
+PickPlace:    +1 per object correctly in container  (max +4 per episode)
+NutAssembly:  +1 per nut correctly on peg           (max +2 per episode)
+```
+This is why HER is essential — without it early training is nearly blind.
+
+---
+
+### HER Replay Buffer Format
+
+Each stored transition:
+```python
+{
+  "obs":            np.array [72],   # full observation at time t
+  "action":         np.array [8],    # action taken
+  "next_obs":       np.array [72],   # observation at time t+1
+  "reward":         float,           # 0 or 1
+  "done":           bool,
+  "achieved_goal":  np.array [3],    # where the object actually ended up
+  "desired_goal":   np.array [3],    # where it was supposed to go
+}
+```
+
+After a failed episode, HER picks k=4 random timesteps and relabels:
+`achieved_goal at step t` → treated as if it *were* the desired_goal → reward becomes +1.
+The arm learns "how to move objects to arbitrary positions" before hitting the exact target.
+
+---
+
+### Low-Level Agent: SAC Networks
+
+**Actor (policy)** — decides which action to take:
+```
+Input:   concat(obs [72], desired_goal [3])  →  [75]
+Layer 1: Linear(75 → 256) + ReLU
+Layer 2: Linear(256 → 256) + ReLU
+Output:  mean [8] + log_std [8]  →  sample action via reparameterization
+```
+
+**Two Critics (Q1, Q2)** — estimate how good a (state, action) pair is:
+```
+Input:   concat(obs [72], goal [3], action [8])  →  [83]
+Layer 1: Linear(83 → 256) + ReLU
+Layer 2: Linear(256 → 256) + ReLU
+Output:  scalar Q-value
+```
+Two critics, take the minimum → prevents Q-value overestimation (SAC stability trick).
+
+**SAC training loop (every 50 env steps):**
+1. Sample batch of 256 transitions from replay buffer
+2. HER relabels 4 out of every 5 sampled goals
+3. Update critics: minimize Bellman error
+4. Update actor: maximize Q + entropy bonus (encourages exploration)
+5. Soft-update target networks: `θ_target ← 0.005·θ + 0.995·θ_target`
+
+---
+
+### High-Level Agent: DQN Networks
+
+Decides *which object to target next*. Runs once per sub-task (not every physics step).
+
+**Input — high-level state** `[20]`:
+```
+per object (×4):
+  placed_flag  [1]   1 if already correctly placed, else 0
+  obj_pos      [3]   current XYZ position
+Total: [4] × 4 objects = [16], plus 4 task/phase context flags = [20]
+```
+
+**Q-network:**
+```
+Input:   [20]
+Layer 1: Linear(20 → 128) + ReLU
+Layer 2: Linear(128 → 64) + ReLU
+Output:  Q-value per sub-task  →  [4]  (one per object)
+```
+
+Action = sub-task index (0–3). The selected index determines which object's container position becomes the goal for SAC.
+
+---
+
+### Hierarchical Control Loop
+
+```
+Episode reset
+     │
+     ▼
+DQN reads high-level state [20]
+  → picks sub-task i  (which object to place next)
+     │
+     ▼
+goal = container_i_pos  [3]
+     │
+     ▼
+SAC runs ≤ T_low steps
+  input each step: concat(obs [72], goal [3]) → [75]
+  output each step: action [8]
+  stops: object placed OR T_low steps elapsed
+     │
+     ├─ success → DQN reward +1, update DQN buffer
+     └─ failure → DQN reward  0, update DQN buffer
+     │
+     ▼
+Repeat until all objects placed or episode horizon reached
+```
+
+DQN sees sub-task outcomes. SAC sees every physics step but focuses on one object at a time.
+
+---
+
+### Curriculum Stages
+
+| Stage | Task | Input shape | Max reward |
+|-------|------|-------------|------------|
+| 1 | PickPlace, 1 object  | obs [39] + goal [3] = [42] | +1 |
+| 2 | PickPlace, 4 objects | obs [72] + goal [3] = [75] | +4 |
+| 3 | NutAssembly, 1 nut   | obs [46] + goal [3] = [49] | +1 |
+| 4 | NutAssembly, 2 nuts  | obs [60] + goal [3] = [63] | +2 |
+
+Each stage fine-tunes from the previous checkpoint.
+
+---
+
+### Full Data Flow
+
+```
+MuJoCo physics
+    │  obs [72], reward float, done bool
+    ▼
+Env Wrapper  (Gym-compatible, adds achieved_goal / desired_goal)
+    │  {obs [72], achieved_goal [3], desired_goal [3]}
+    ▼
+Replay Buffer  (capacity 1M transitions)
+    │  stores raw + HER-relabeled transitions
+    ▼
+SAC training  (every 50 env steps, batch size 256)
+    │  updates Actor [75→256→256→16] and Critics [83→256→256→1]
+    ▼
+Hierarchical Runner
+    │  calls DQN [20→128→64→4] every T_low steps
+    ▼
+W&B Logger
+       episode_reward, success_rate, actor_loss, critic_loss, entropy
+```
+
+---
+
 ## [2026-05-01] Project Setup: README, Structure, and Key Concepts
 
 ### What it does
