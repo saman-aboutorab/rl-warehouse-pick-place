@@ -1,0 +1,41 @@
+# Data and large files
+data/
+models/*.pth
+models/*.pt
+models/*.ckpt
+
+# Video recordings
+videos/
+*.mp4
+*.avi
+
+# W&B and TensorBoard logs
+wandb/
+runs/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
