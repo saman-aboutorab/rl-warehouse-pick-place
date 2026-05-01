@@ -26,7 +26,11 @@ After completing any non-trivial task, you must:
 3. **Describe how it works** — use a simple example if possible
 4. **Note data formats and dimensions** — shapes, types, file formats involved
 5. **Describe the architecture** — how components connect (system or data flow)
-6. **Tell the user how to test the step** — exact command to run, what output to expect, and what a passing result looks like vs a failure
+6. **Write a verify script and run it** — after every phase or significant task, create or update `scripts/verify_phaseN.py`. It must:
+   - Run all checks automatically (no manual inspection needed)
+   - Print `PASS` or `FAIL` for each check with a short detail
+   - Be runnable with a single command: `python scripts/verify_phaseN.py`
+   - Be run immediately and the output shown in chat before declaring the task done
 
 Then write that explanation into **`EDUCATION.md`** (see below).
 
@@ -34,19 +38,16 @@ Also post a **brief summary in the chat** — 2–4 bullet points covering what 
 
 ## PHASES.md and PROGRESS.md — How-to-Run Instructions
 
-Whenever a phase step or milestone is completed, update the relevant file with a **"How to run" block** so anyone can reproduce the result without reading the code:
+Whenever a phase or milestone is completed, update the relevant file with the single verify command:
 
-- **`PHASES.md`** — under each completed step, add a collapsible or inline block:
+- **`PHASES.md`** — at the bottom of each completed phase block:
   ```
-  **Run:** `command to execute`
-  **Expect:** what stdout/output should look like on success
+  **Verify:** `source .venv/bin/activate && python scripts/verify_phaseN.py`
   ```
-- **`PROGRESS.md`** — under each milestone entry, add a **Reproduce** section:
+- **`PROGRESS.md`** — under each milestone entry:
   ```
-  **Reproduce:**
-  1. `command one`
-  2. `command two`
-  **Expected result:** what the user should see
+  **Reproduce:** `source .venv/bin/activate && python scripts/verify_phaseN.py`
+  **Expected:** all checks print PASS
   ```
 
 ---

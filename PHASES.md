@@ -51,6 +51,12 @@ Update the checkboxes as steps are completed.
 
 - [x] **0.7** Commit: `feat: environment wrappers and setup verification`
 
+**Verify phase 0:**
+```bash
+source .venv/bin/activate && python scripts/verify_phase0.py
+```
+**Expected:** all checks print `PASS`
+
 ---
 
 ## Phase 1 — Single-Object Baseline (SAC + HER)
