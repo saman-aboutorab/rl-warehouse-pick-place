@@ -54,6 +54,34 @@ Used for: debugging history, SR&ED documentation, onboarding future contributors
 
 **Git tag:** (waiting for first training run)
 
+**Reproduce:**
+```bash
+source .venv/bin/activate
+
+# Verify both envs run
+python -c "
+import sys; sys.path.insert(0,'src')
+from envs.pickplace_wrapper import PickPlaceWrapper
+from envs.nutassembly_wrapper import NutAssemblyWrapper
+import numpy as np
+
+env = PickPlaceWrapper(single_object='Can')
+obs, _ = env.reset()
+print('PickPlace obs:', obs['observation'].shape, '| goal:', obs['desired_goal'])
+env.close()
+
+env = NutAssemblyWrapper(single_nut='SquareNut')
+obs, _ = env.reset()
+print('NutAssembly obs:', obs['observation'].shape, '| goal:', obs['desired_goal'])
+env.close()
+"
+```
+**Expected result:**
+```
+PickPlace obs: (64,) | goal: [x y z]   ← 3 floats, the Can container position
+NutAssembly obs: (64,) | goal: [x y z] ← 3 floats, the SquarePeg position
+```
+
 **Next steps:** Phase 1 — configure SAC + HER in SB3 for single-object PickPlace (Can → container)
 
 ---

@@ -9,12 +9,46 @@ Update the checkboxes as steps are completed.
 **Goal:** Get the simulator running and understand what data the robot sees and produces.
 **Exit criterion:** Both robosuite environments run without error; observation and action shapes are logged.
 
-- [x] **0.1** Install dependencies: `pip install -r requirements.txt`
-- [x] **0.2** Smoke-test robosuite: instantiate `PickPlace` and `NutAssembly` envs, call `reset()` and `step()` with random actions
-- [x] **0.3** Print and log observation/action space shapes, dtypes, and value ranges for both envs
-- [x] **0.4** Run 10 random-action episodes; render a few frames to confirm the simulator looks correct
-- [x] **0.5** Write `src/envs/pickplace_wrapper.py` — a thin Gym-compatible wrapper around robosuite PickPlace
-- [x] **0.6** Write `src/envs/nutassembly_wrapper.py` — same for NutAssembly
+- [x] **0.1** Install dependencies
+  **Run:** `pip install -r requirements.txt`
+  **Expect:** all packages resolve without error; `pip list` shows robosuite 1.5.x, mujoco 3.x, torch 2.x
+
+- [x] **0.2** Smoke-test robosuite
+  **Run:** `python - <<'EOF'`
+  ```python
+  import robosuite as suite, numpy as np
+  env = suite.make("PickPlace", robots="Panda", has_renderer=False, has_offscreen_renderer=False, use_camera_obs=False, use_object_obs=True)
+  obs = env.reset(); obs, r, done, info = env.step(np.zeros(env.action_dim)); print("OK", r)
+  EOF
+  ```
+  **Expect:** prints `OK 0.0` with no Python errors (robosuite WARNINGs about macros are fine)
+
+- [x] **0.3** Log observation/action shapes
+  **Run:** inspect each key in `env.reset()` and print `shape`, `dtype`, `min`, `max`
+  **Expect:** `robot0_proprio-state` → `[50]`, `object-state` → `[56]` (4-obj) or `[14]` (single), action → `[7]`
+
+- [x] **0.4** Run 10 random-action episodes
+  **Run:** loop `env.reset()` + `env.step(random_action)` for 10 episodes
+  **Expect:** all episode rewards = `0.0` (sparse reward; random arm never places correctly), lengths = 1000
+
+- [x] **0.5** Write `src/envs/pickplace_wrapper.py`
+  **Run:**
+  ```bash
+  source .venv/bin/activate
+  python -c "
+  import sys; sys.path.insert(0,'src')
+  from envs.pickplace_wrapper import PickPlaceWrapper
+  env = PickPlaceWrapper(single_object='Can')
+  obs, _ = env.reset()
+  print(obs['observation'].shape, obs['achieved_goal'].shape)
+  "
+  ```
+  **Expect:** `(64,) (3,)` — observation flat vector and 3D goal
+
+- [x] **0.6** Write `src/envs/nutassembly_wrapper.py`
+  **Run:** same pattern, replace `PickPlaceWrapper` → `NutAssemblyWrapper(single_nut='SquareNut')`
+  **Expect:** `(64,) (3,)`
+
 - [x] **0.7** Commit: `feat: environment wrappers and setup verification`
 
 ---

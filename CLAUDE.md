@@ -26,10 +26,28 @@ After completing any non-trivial task, you must:
 3. **Describe how it works** — use a simple example if possible
 4. **Note data formats and dimensions** — shapes, types, file formats involved
 5. **Describe the architecture** — how components connect (system or data flow)
+6. **Tell the user how to test the step** — exact command to run, what output to expect, and what a passing result looks like vs a failure
 
 Then write that explanation into **`EDUCATION.md`** (see below).
 
 Also post a **brief summary in the chat** — 2–4 bullet points covering what was done, what files were created/changed, and what comes next. Include a markdown link to each file or section touched so the user can jump straight to it.
+
+## PHASES.md and PROGRESS.md — How-to-Run Instructions
+
+Whenever a phase step or milestone is completed, update the relevant file with a **"How to run" block** so anyone can reproduce the result without reading the code:
+
+- **`PHASES.md`** — under each completed step, add a collapsible or inline block:
+  ```
+  **Run:** `command to execute`
+  **Expect:** what stdout/output should look like on success
+  ```
+- **`PROGRESS.md`** — under each milestone entry, add a **Reproduce** section:
+  ```
+  **Reproduce:**
+  1. `command one`
+  2. `command two`
+  **Expected result:** what the user should see
+  ```
 
 ---
 
