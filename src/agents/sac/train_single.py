@@ -21,6 +21,7 @@ import sys
 import yaml
 import logging
 import numpy as np
+from datetime import datetime
 
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -51,7 +52,10 @@ EVAL_EPISODES  = cfg["eval"]["n_eval_episodes"]
 EVAL_FREQ      = cfg["eval"]["eval_freq"]
 BEST_MODEL_DIR  = cfg["eval"]["best_model_save_path"].strip()  # SB3 saves best_model.zip here
 BEST_MODEL_PATH = os.path.join(BEST_MODEL_DIR, "best_model.zip")
-CHECKPOINT_DIR  = cfg["eval"]["checkpoint_dir"].strip()
+# Each run gets its own subfolder: e.g. models/checkpoints/500k_20260501_175204/
+# This means a 100k run and a later 500k run never overwrite each other.
+_run_tag       = f"{TOTAL_STEPS // 1000}k_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+CHECKPOINT_DIR = os.path.join(cfg["eval"]["checkpoint_dir"].strip(), _run_tag)
 WANDB_PROJECT  = cfg["logging"]["wandb_project"]
 WANDB_RUN_NAME = cfg["logging"]["wandb_run_name"]
 SINGLE_OBJECT  = cfg["env"]["single_object"]

@@ -5,6 +5,153 @@ Written for someone learning the stack from scratch — no assumed knowledge.
 
 ---
 
+## [2026-05-01] Phase 1: Training Metrics — What to Watch and Why
+
+### Where to find them
+
+Every metric appears live in the tqdm bar during training:
+```
+Training: 14%|████  | 14257/100000 [03:37<22:25, 63.74 steps/s,
+          ep=28, reward=0.00, success=0%, critic=0.154, actor=-17.198, α=0.005]
+```
+Everything is also logged to W&B (charts, history, comparison across runs).
+
+---
+
+### `ep` — episode count
+
+One episode = the arm starts at home position, takes up to 500 steps, then resets regardless of success. With horizon=500 and training for 500k steps, you get ~1,000 episodes total.
+
+---
+
+### `reward` — mean episode reward (last 10 episodes)
+
+Total reward per episode averaged over the last 10 episodes. Since reward is **sparse** (+1 if the Can lands in the container within 5 cm, 0 otherwise), this equals the success rate as a fraction.
+
+```
+reward = 0.00  →  arm has never succeeded yet (expected for first 100–200k steps)
+reward = 0.50  →  arm succeeds in about half of recent episodes
+reward = 1.00  →  arm succeeds every episode (goal)
+```
+
+This is the **main training signal**. It will stay flat at 0.00 for a long time before jumping — that is normal. HER is building up internal knowledge during the flat period.
+
+---
+
+### `success` — success rate % (last 10 episodes)
+
+Same number as `reward`, shown as a percentage. `success=80%` means 8 of the last 10 episodes ended with the Can correctly placed.
+
+**Phase 1 exit criterion: `success > 80%` on 50 dedicated eval episodes.**
+
+---
+
+### `critic` — critic loss (Bellman error)
+
+The two Q-networks predict: *"if I take action A in state S, how much total reward will I collect from here?"* The critic loss measures how wrong those predictions are:
+
+```
+target     = reward + γ × Q(next_state, best_next_action)
+critic_loss = mean( (Q_predicted - target)² )
+```
+
+| Phase | Typical value | What it means |
+|-------|--------------|---------------|
+| Early (0–100k steps) | 0.1 – 2.0 | Q-estimates are wildly inaccurate |
+| Mid (200–400k steps) | 0.01 – 0.1 | Estimates are converging |
+| Late (400k+ steps)   | < 0.05 | Q-function is accurate, policy is reliable |
+
+It never reaches exactly zero because the target itself keeps moving as the policy improves. Think of it like a weather forecaster getting better over time — even a good forecaster isn't perfect.
+
+---
+
+### `actor` — actor loss (policy gradient)
+
+The actor is trained to output actions that maximize Q-value plus an entropy bonus. The loss measures how strongly the policy is being pushed:
+
+```
+actor_loss = -(Q_value + α × entropy_of_action_distribution)
+```
+
+- **Negative** throughout training (the optimizer is maximizing, not minimizing)
+- **Large magnitude (−15 to −20) early**: the policy is far from optimal, large gradient updates
+- **Moves toward 0** as the policy converges to a stable strategy
+
+It's more volatile than critic loss and can jump around — that's normal. What you watch for is a general trend toward smaller magnitude over time.
+
+---
+
+### `α` — entropy coefficient (SAC temperature)
+
+SAC's exploration knob. It weights how much the agent values **trying varied actions** versus **repeating what worked**:
+
+```
+total objective = Q_value + α × (entropy of the action distribution)
+```
+
+High α → agent takes more random, varied actions (explores more)  
+Low α → agent commits to its best-known actions (exploits)
+
+α is **auto-tuned** during training. SAC adjusts it to keep a target level of entropy in the policy.
+
+| Value | Interpretation |
+|-------|---------------|
+| 0.5 – 1.0 (early) | Lots of exploration; arm tries many random motions |
+| 0.05 – 0.1 (mid)  | Policy is becoming confident, less random |
+| < 0.01 (late)     | Policy is committed; exploiting learned strategy |
+
+**Watch for:** if α drops to near zero in the first 50k steps, the policy collapsed before learning anything useful. It should stay above ~0.01 through early training.
+
+---
+
+### Eval metrics (W&B only, every 20k steps)
+
+`eval/success_rate` — runs 50 full episodes with the **greedy policy** (no randomness, always picks the best-known action). This is the most reliable measure of actual performance because training metrics are noisy.
+
+`eval/best_success` — the highest eval success rate seen so far across any checkpoint. The `best_model.zip` corresponds to this value.
+
+---
+
+### What healthy learning looks like
+
+```
+Steps       reward  success  critic   actor     α
+──────────────────────────────────────────────────────
+  0–100k    0.00    0%       0.1–2.0  −15–−20   1.0→0.05
+100–200k    0.00    0%       falling  −10–−15   ~0.05
+200–300k    0.05    5%       0.01–0.1 −5–−10    ~0.01–0.05
+300–400k    0.30    30%      < 0.05   −2–−5     ~0.01
+400–500k    0.80    80%      stable   ~−1       stable
+```
+
+The long flat period at reward=0.00 is **not a bug** — HER is teaching the arm to move objects to arbitrary positions. The reward jump around 200k is when that generalised skill transfers to the real container goal.
+
+---
+
+### Checkpoint naming
+
+Each training run saves checkpoints to its own folder so runs never overwrite each other:
+
+```
+models/checkpoints/
+  100k_20260501_175204/          ← 100k-step run started at 17:52
+    sac_single_20000_steps.zip
+    sac_single_40000_steps.zip
+    sac_single_60000_steps.zip
+    sac_single_80000_steps.zip
+    sac_single_100000_steps.zip
+  500k_20260502_090000/          ← 500k-step run started at 09:00
+    sac_single_100000_steps.zip
+    sac_single_200000_steps.zip
+    sac_single_300000_steps.zip
+    sac_single_400000_steps.zip
+    sac_single_500000_steps.zip
+```
+
+The step number in the filename is the absolute training step — `sac_single_100000_steps.zip` from the 100k run and from the 500k run are both at the same point in training (100k env steps), so you can directly compare them.
+
+---
+
 ## [2026-05-01] Phase 1: SAC + HER Training Setup
 
 ### What was built
