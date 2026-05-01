@@ -29,7 +29,7 @@ After completing any non-trivial task, you must:
 
 Then write that explanation into **`EDUCATION.md`** (see below).
 
-Also post a **brief summary in the chat** — 2–4 bullet points covering what was done, what files were created/changed, and what comes next.
+Also post a **brief summary in the chat** — 2–4 bullet points covering what was done, what files were created/changed, and what comes next. Include a markdown link to each file or section touched so the user can jump straight to it.
 
 ---
 
