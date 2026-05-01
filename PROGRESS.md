@@ -24,3 +24,16 @@ Used for: debugging history, SR&ED documentation, onboarding future contributors
 4. Begin SAC + HER training on single-object PickPlace
 
 ---
+
+## [2026-05-01] Milestone: PHASES.md created — roadmap locked in
+
+**What works:**
+- Full 6-phase roadmap written in `PHASES.md` covering: env setup, single-object baseline, flat multi-object, hierarchical DQN+SAC, NutAssembly curriculum, ablation study, and final polish
+- Each phase has a clear exit criterion and numbered checklist steps
+- Phase summary table added for quick orientation
+
+**Git tag:** (not yet — waiting for first runnable code)
+
+**Next steps:** Begin Phase 0 — install dependencies and smoke-test both robosuite environments
+
+---
