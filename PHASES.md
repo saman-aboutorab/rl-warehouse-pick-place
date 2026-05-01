@@ -9,13 +9,13 @@ Update the checkboxes as steps are completed.
 **Goal:** Get the simulator running and understand what data the robot sees and produces.
 **Exit criterion:** Both robosuite environments run without error; observation and action shapes are logged.
 
-- [ ] **0.1** Install dependencies: `pip install -r requirements.txt`
-- [ ] **0.2** Smoke-test robosuite: instantiate `PickPlace` and `NutAssembly` envs, call `reset()` and `step()` with random actions
-- [ ] **0.3** Print and log observation/action space shapes, dtypes, and value ranges for both envs
-- [ ] **0.4** Run 10 random-action episodes; render a few frames to confirm the simulator looks correct
-- [ ] **0.5** Write `src/envs/pickplace_wrapper.py` — a thin Gym-compatible wrapper around robosuite PickPlace
-- [ ] **0.6** Write `src/envs/nutassembly_wrapper.py` — same for NutAssembly
-- [ ] **0.7** Commit: `feat: environment wrappers and setup verification`
+- [x] **0.1** Install dependencies: `pip install -r requirements.txt`
+- [x] **0.2** Smoke-test robosuite: instantiate `PickPlace` and `NutAssembly` envs, call `reset()` and `step()` with random actions
+- [x] **0.3** Print and log observation/action space shapes, dtypes, and value ranges for both envs
+- [x] **0.4** Run 10 random-action episodes; render a few frames to confirm the simulator looks correct
+- [x] **0.5** Write `src/envs/pickplace_wrapper.py` — a thin Gym-compatible wrapper around robosuite PickPlace
+- [x] **0.6** Write `src/envs/nutassembly_wrapper.py` — same for NutAssembly
+- [x] **0.7** Commit: `feat: environment wrappers and setup verification`
 
 ---
 
@@ -142,6 +142,6 @@ Update the checkboxes as steps are completed.
 
 ## Current Status
 
-**Active phase:** Phase 0
-**Last completed step:** —
+**Active phase:** Phase 1
+**Last completed step:** 0.7 — Phase 0 complete
 **Blockers:** None

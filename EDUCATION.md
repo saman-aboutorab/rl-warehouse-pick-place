@@ -30,43 +30,47 @@ obs, reward, done, info = env.step(action) # advance one physics step (~20ms)
 
 ### Observation Space (what the agent sees)
 
-**PickPlace** — flat float vector, shape `[72]`:
+> Verified by running robosuite 1.5.2 — actual numbers differ from initial estimates.
+
+Robosuite packages the full observation into two flat vectors:
+- `robot0_proprio-state` — everything about the robot itself
+- `object-state` — everything about the objects in the scene
+
+**PickPlace (4-object mode)** — wrapper concatenates both:
 ```
-robot0_joint_pos_cos   [7]   cosine of each joint angle
-robot0_joint_pos_sin   [7]   sine of each joint angle
-robot0_joint_vel       [7]   joint angular velocities
-robot0_eef_pos         [3]   end-effector XYZ position
-robot0_eef_quat        [4]   end-effector orientation (quaternion)
-robot0_gripper_qpos    [2]   finger positions (open/close)
-robot0_gripper_qvel    [2]   finger velocities
-─────────────────────────── subtotal [32]  robot proprioception
-object_i_pos           [3]   XYZ position ×4 objects = [12]
-object_i_quat          [4]   orientation  ×4 objects = [16]
-─────────────────────────── subtotal [28]  object state
-container_i_pos        [3]   XYZ of each target container ×4 = [12]
-─────────────────────────── subtotal [12]  goal positions
-Total: [72]  dtype: float32
+robot0_proprio-state   [50]   joint pos/cos/sin/vel/acc, eef pos+quat, gripper pos+vel
+object-state           [56]   pos[3]+quat[4]+rel_pos[3]+rel_quat[4] per object × 4
+Total obs (wrapper):   [106]  dtype: float32
+
+Single-object mode (e.g. one Can):
+object-state           [14]   same fields, but only for the one active object
+Total obs (wrapper):   [64]   dtype: float32
 ```
 
-**NutAssembly** — shape `[~60]`:
+**NutAssembly (2-nut mode)**:
 ```
-robot proprioception    [32]
-nut_i_pos               [3] ×2 = [6]
-nut_i_quat              [4] ×2 = [8]   ← orientation critical for peg insertion
-peg_i_pos               [3] ×2 = [6]
-peg_i_quat              [4] ×2 = [8]
-Total: [~60]  dtype: float32
+robot0_proprio-state   [50]
+object-state           [28]   pos[3]+quat[4]+rel_pos[3]+rel_quat[4] per nut × 2
+Total obs (wrapper):   [78]   dtype: float32
+
+Single-nut mode:
+object-state           [14]
+Total obs (wrapper):   [64]   dtype: float32
 ```
+
+The wrapper detects these dimensions dynamically at init time, so no hardcoded numbers.
 
 ---
 
 ### Action Space (what the agent outputs)
 
-Shape `[8]`, dtype `float32`, all values clamped to `[-1, 1]`:
+Shape `[7]`, dtype `float64`, all values clamped to `[-1, 1]`:
 ```
-joint_velocity_commands  [7]   one per joint — how fast to rotate
-gripper_command          [1]   -1 = fully open, +1 = fully closed
+joint_velocity_commands  [7]   one per joint
 ```
+Note: gripper is **not** a separate action dimension in the default Panda controller —
+it is embedded in the composite controller config (`default_panda.json`). The wrapper
+casts to float64 before passing to robosuite, and float32 on the output side.
 
 ---
 
